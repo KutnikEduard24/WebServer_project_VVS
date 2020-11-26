@@ -1,0 +1,162 @@
+package webserver;
+import java.io.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+
+
+
+public class ServerHTTP extends Thread {
+
+    public int server_port = 4000;
+    public String server_folder = "D:/An IV/VVS/Proiect_VVS_WebServer/HTML";
+    public String server_status = "STOP";
+    public static String handledRequest = "";
+    public ServerHTTP(int server_port, String server_folder, String server_status){
+
+        this.server_port = server_port;
+        this.server_folder = server_folder;
+        this.server_status = server_status;
+
+    }
+
+    public void modify_server_port(int new_server_port){
+
+        server_port = new_server_port;
+
+    }
+
+    public void modify_server_status(String new_server_status){
+
+        server_status = new_server_status;
+
+    }
+
+    public void modify_server_folder(String new_server_folder){
+
+        if(Files.exists(Paths.get(new_server_folder,"/firstpage"))
+                && Files.exists(Paths.get(new_server_folder,"/firstpage/first_page.html"))
+                    && Files.exists(Paths.get(new_server_folder,"/404notfound"))
+                        && Files.exists(Paths.get(new_server_folder,"/404notfound/404_page.html"))
+                            && Files.exists(Paths.get(new_server_folder,"/serverISdown"))
+                                && Files.exists(Paths.get(new_server_folder,"/serverISdown/server_down.html"))
+                                    && Files.exists(Paths.get(new_server_folder,"/SeverMaintenance"))
+                                        && Files.exists(Paths.get(new_server_folder,"/SeverMaintenance/server_maintenance.html"))
+                                             && Files.exists(Paths.get(new_server_folder,"/favicon.ico")))
+
+            server_folder = new_server_folder;
+
+        else
+            System.out.println("Error while modifying server folder");
+    }
+
+    public Path getFilePath(String path)
+    {
+
+        if ("/".equals(path))
+        {
+            return Paths.get(server_folder,"/firstpage/first_page.html");
+        }
+        else if("/index.css".equals(path))
+        {
+            return Paths.get(server_folder,"/index/index.css");
+        }
+        else if("/favicon.ico".equals(path))
+        {
+            return Paths.get(server_folder,path);
+        }
+        else
+            return Paths.get(path);
+    }
+
+    public void sendResponse(OutputStream outputStream, String status, String contentType, byte[] content) throws IOException
+    {
+        outputStream.write(("HTTP/1.1 \r\n" + status).getBytes());
+        outputStream.write(("ContentType: " + contentType + "\r\n").getBytes());
+        outputStream.write("\r\n".getBytes());
+        outputStream.write(content);
+        outputStream.write("\r\n\r\n".getBytes());
+    }
+
+
+   public void clientHandler(Socket client_socket) {
+        try {
+            try {
+                //read characters from the client
+                OutputStream outputStream = client_socket.getOutputStream();
+                //we read characters from the client through input stream on the socket
+                BufferedReader inputStream = new BufferedReader(new InputStreamReader(client_socket.getInputStream()));
+
+
+                String inputLine;
+                ArrayList<String> inputLines = new ArrayList<String>();
+                while ((inputLine = inputStream.readLine()) != null) {
+                    inputLines.add(inputLine);
+
+                    if (inputLine.trim().equals(""))
+                        break;
+                }
+
+                if (inputLines.size() != 0) {
+                    String raw_path = inputLines.get(0).split(" ")[1];
+
+                    Path filePath = getFilePath(raw_path);
+                    String contentType = Files.probeContentType(filePath);
+                    if (server_status.equals("RUN")) {
+                        if (Files.exists(filePath))
+                            sendResponse(outputStream, "200 OK", contentType, Files.readAllBytes(filePath));
+                        else
+                            sendResponse(outputStream, "404 Not Found", contentType,
+                                    Files.readAllBytes(Paths.get(server_folder, "/404notfound/404_page.html")));
+                    } else if (server_status.equals("Maintenance")) {
+                        if (contentType.contains("html"))
+                            sendResponse(outputStream, "503 Service Unavailable", contentType,
+                                    Files.readAllBytes(Paths.get(server_folder, "/SeverMaintenance/server_maintenance.html")));
+                        else
+                            sendResponse(outputStream, "200 OK", contentType, Files.readAllBytes(filePath));
+                    } else {
+                        if (contentType.contains("html"))
+                            sendResponse(outputStream, "503 Service Unavailable", contentType,
+                                    Files.readAllBytes(Paths.get(server_folder, "/serverISdown/server_down.html")));
+                        else
+                            sendResponse(outputStream, "200 OK", contentType, Files.readAllBytes(filePath));
+                    }
+                }
+                outputStream.close();
+                inputStream.close();
+
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        catch (NullPointerException e)
+        {
+            System.err.println("Problem with Communication Server");
+        } 
+
+    }
+
+    public void handleRequest() {
+
+        try {
+            ServerSocket serverSocket = new ServerSocket(server_port);
+            Socket clientSocket = serverSocket.accept();
+            clientHandler(clientSocket);
+            clientSocket.close();
+            serverSocket.close();
+
+        } catch (IOException e) {
+            System.out.println("Can't connect to port:" + server_port);
+        }
+
+    }
+
+}
+
+
+
